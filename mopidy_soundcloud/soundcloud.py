@@ -1,12 +1,8 @@
 import collections
-import datetime
 import logging
 import re
-import string
-import time
-import unicodedata
+from datetime import datetime, timedelta
 from contextlib import closing
-from multiprocessing.pool import ThreadPool
 from urllib.parse import quote_plus
 from bs4 import BeautifulSoup
 
@@ -17,87 +13,27 @@ from requests.exceptions import HTTPError
 import mopidy_soundcloud
 from mopidy import httpclient
 from mopidy.models import Album, Artist, Track
+from mopidy_soundcloud.utils import (
+    cache,
+    readable_url,
+    get_user_url,
+    get_datetime,
+    pick_transcoding,
+    parse_fail_reason,
+    sanitize_list,
+)
 
 logger = logging.getLogger(__name__)
 
-
-def safe_url(uri):
-    return quote_plus(
-        unicodedata.normalize("NFKD", uri).encode("ASCII", "ignore")
-    )
-
-
-def readable_url(uri):
-    valid_chars = f"-_.() {string.ascii_letters}{string.digits}"
-    safe_uri = (
-        unicodedata.normalize("NFKD", uri).encode("ascii", "ignore").decode()
-    )
-    return re.sub(
-        r"\s+", " ", "".join(c for c in safe_uri if c in valid_chars)
-    ).strip()
-
-
-def get_user_url(user_id):
-    return "me" if not user_id else f"users/{user_id}"
-
-
-def get_requests_session(proxy_config, user_agent, token, public=False):
-    proxy = httpclient.format_proxy(proxy_config)
-    full_user_agent = httpclient.format_user_agent(user_agent)
-
-    session = requests.Session()
-    session.proxies.update({"http": proxy, "https": proxy})
-    if not public:
-        session.headers.update({"user-agent": full_user_agent})
-        session.headers.update({"Authorization": f"OAuth {token}"})
-
-    return session
-
-
-def get_mopidy_requests_session(config, public=False):
-    return get_requests_session(
-        proxy_config=config["proxy"],
-        user_agent=(
-            f"{mopidy_soundcloud.Extension.dist_name}/"
-            f"{mopidy_soundcloud.__version__}"
-        ),
-        token=config["soundcloud"]["auth_token"],
-        public=public,
-    )
-
-
-class cache:  # noqa
-    # TODO: merge this to util library
-
-    def __init__(self, ctl=8, ttl=3600):
-        self.cache = {}
-        self.ctl = ctl
-        self.ttl = ttl
-        self._call_count = 1
-
-    def __call__(self, func):
-        def _memoized(*args):
-            self.func = func
-            now = time.time()
-            try:
-                value, last_update = self.cache[args]
-                age = now - last_update
-                if self._call_count >= self.ctl or age > self.ttl:
-                    self._call_count = 1
-                    raise AttributeError
-
-                self._call_count += 1
-                return value
-
-            except (KeyError, AttributeError):
-                value = self.func(*args)
-                self.cache[args] = (value, now)
-                return value
-
-            except TypeError:
-                return self.func(*args)
-
-        return _memoized
+# import vcr
+# import os
+# my_vcr = vcr.VCR(
+#     serializer="yaml",
+#     cassette_library_dir=os.path.abspath(os.path.dirname(__file__)) + "/fixtures",
+#     record_mode="once",
+#     match_on=["uri", "method"],
+#     decode_compressed_response=False,
+# )
 
 
 class ThrottlingHttpAdapter(HTTPAdapter):
@@ -106,14 +42,12 @@ class ThrottlingHttpAdapter(HTTPAdapter):
         self.max_hits = burst_length
         self.hits = 0
         self.rate = burst_length / burst_window
-        self.burst_window = datetime.timedelta(seconds=burst_window)
-        self.total_window = datetime.timedelta(
-            seconds=burst_window + wait_window
-        )
-        self.timestamp = datetime.datetime.min
+        self.burst_window = timedelta(seconds=burst_window)
+        self.total_window = timedelta(seconds=burst_window + wait_window)
+        self.timestamp = datetime.min
 
     def _is_too_many_requests(self):
-        now = datetime.datetime.utcnow()
+        now = datetime.utcnow()
         if now < self.timestamp + self.total_window:
             elapsed = now - self.timestamp
             self.hits += 1
@@ -147,34 +81,138 @@ class ThrottlingHttpAdapter(HTTPAdapter):
             return super().send(request, **kwargs)
 
 
-class SoundCloudClient:
-    CLIENT_ID = "93e33e327fd8a9b77becd179652272e2"
+class SoundCloudSession(requests.Session):
+    OAuth = False
+    client_param = None
 
-    public_client_id = None
-
-    def __init__(self, config):
+    def __init__(self, config, host, explore_songs, client_id=None):
         super().__init__()
-        self.explore_songs = config["soundcloud"].get("explore_songs", 25)
-        self.http_client = get_mopidy_requests_session(config)
+        self.api_host = host
+        self.client_id = client_id
+        self.explore_songs = explore_songs
+
+        proxy = httpclient.format_proxy(config["proxy"])
+        self.proxies.update({"http": proxy, "https": proxy})
+
+        if self.client_id:
+            full_user_agent = httpclient.format_user_agent(
+                f"{mopidy_soundcloud.Extension.dist_name}/"
+                f"{mopidy_soundcloud.__version__}"
+            )
+            add_headers = {
+                "user-agent": full_user_agent,
+                "Authorization": f"OAuth {config['soundcloud']['auth_token']}",
+            }
+            self.headers.update(add_headers)
+            self.OAuth = True
+
         adapter = ThrottlingHttpAdapter(
             burst_length=3, burst_window=1, wait_window=10
         )
-        self.http_client.mount("https://api.soundcloud.com/", adapter)
+        self.mount(self.api_host, adapter)
 
-        self.public_stream_client = get_mopidy_requests_session(
-            config, public=True
+    @property
+    def client_id(self):
+        return self._client_id
+
+    @client_id.setter
+    def client_id(self, client_id):
+        self.client_param = ("client_id", client_id)
+        self._client_id = client_id
+
+    def get_request(self, *args, **kwargs):
+        return super().get(*args, **kwargs)
+
+    def get(self, filename, limit=None) -> dict:
+        if not self.OAuth and self.client_id is None:
+            self.update_public_client_id()
+
+        params = [self.client_param]
+        if limit:
+            limit_int = limit if type(limit) == int else self.explore_songs
+            params = [("limit", limit_int)] + params
+
+        url = f"{self.api_host}/{filename}"
+        try:
+            with closing(self.get_request(url, params=params)) as res:
+                logger.debug(f"Requested {res.url}")
+                res.raise_for_status()
+                return res.json()
+        except Exception as e:
+            if isinstance(e, HTTPError) and e.response.status_code == 401:
+                if self.OAuth:
+                    logger.error(
+                        'Invalid "auth_token" used for SoundCloud '
+                        "authentication!"
+                    )
+                else:
+                    logger.error(f"SoundCloud API request failed: {e}")
+            else:
+                logger.error(f"SoundCloud API request failed: {e}")
+        return {}
+
+    def get_public_stream(self, transcoding):
+        return self.get_request(transcoding["url"], params=[self.client_param])
+
+    def update_public_client_id(self):
+        """ Gets a client id which can be used to stream publicly available tracks """
+
+        def _get_page(url):
+            return self.get_request(url).content.decode("utf-8")
+
+        public_page = _get_page("https://soundcloud.com/")
+        regex_str = r"client_id=([a-zA-Z0-9]{16,})"
+        soundcloud_soup = BeautifulSoup(public_page, "html.parser")
+        scripts = soundcloud_soup.find_all("script", attrs={"src": True})
+        for script in scripts:
+            for match in re.finditer(regex_str, _get_page(script["src"])):
+                self.client_id = match.group(1)
+                logger.debug(
+                    f"Updated SoundCloud public client id to: {self.client_id}"
+                )
+                return
+
+
+class SoundCloudClient:
+    CLIENT_ID = "93e33e327fd8a9b77becd179652272e2"
+
+    auth_error_codes = [401, 403, 429]
+    api_url = {
+        "v1": "https://api.soundcloud.com",
+        "v2": "https://api-v2.soundcloud.com",
+    }
+
+    def __init__(self, config):
+        super().__init__()
+        explore_songs = config["soundcloud"].get("explore_songs", 25)
+        self.streaming_pref = config["soundcloud"].get("stream_pref")
+        if self.streaming_pref is None:
+            self.streaming_pref = "progressive"
+
+        self.OAuth = SoundCloudSession(
+            config,
+            self.api_url["v1"],
+            explore_songs,
+            client_id=self.CLIENT_ID,
+        )
+        self.session_public = SoundCloudSession(
+            config,
+            self.api_url["v2"],
+            explore_songs,
         )
 
     @property
     @cache()
     def user(self):
-        return self._get("me")
+        return self.OAuth.get("me")
 
     @cache(ttl=10)
     def get_user_stream(self):
         # https://developers.soundcloud.com/docs/api/reference#activities
         tracks = []
-        stream = self._get("me/activities", limit=True).get("collection", [])
+        stream = self.OAuth.get("me/activities", limit=True).get(
+            "collection", []
+        )
         for data in stream:
             kind = data.get("origin")
             # multiple types of track with same data
@@ -186,61 +224,125 @@ class SoundCloudClient:
                     if isinstance(playlist, collections.Iterable):
                         tracks.extend(self.parse_results(playlist))
 
-        return self.sanitize_tracks(tracks)
+        return sanitize_list(tracks)
 
     @cache(ttl=10)
-    def get_followings(self, user_id=None):
+    def get_user_followings(self, user_id=None):
         user_url = get_user_url(user_id)
-        users = []
-        playlists = self._get(f"{user_url}/followings", limit=True)
+        playlists = self.OAuth.get(f"{user_url}/followings", limit=True)
         for playlist in playlists.get("collection", []):
             user_name = playlist.get("username")
             user_id = str(playlist.get("id"))
             logger.debug(f"Fetched user {user_name} with ID {user_id}")
-            users.append((user_name, user_id))
-        return users
+        return playlists
 
     @cache()
     def get_set(self, set_id):
         # https://developers.soundcloud.com/docs/api/reference#playlists
-        playlist = self._get(f"playlists/{set_id}")
+        # Returns full results only using standard app client_id and API-v1
+        return self.OAuth.get(f"playlists/{set_id}")
+
+    def get_set_tracks(self, set_id):
+        playlist = self.get_set(set_id)
         return playlist.get("tracks", [])
 
     @cache(ttl=10)
-    def get_sets(self, user_id=None):
+    def get_user_sets(self, user_id=None):
         user_url = get_user_url(user_id)
-        playable_sets = []
-        for playlist in self._get(f"{user_url}/playlists", limit=True):
+        playable_sets = self.OAuth.get(f"{user_url}/playlists", limit=True)
+        for playlist in playable_sets:
             name = playlist.get("title")
             set_id = str(playlist.get("id"))
             tracks = playlist.get("tracks", [])
             logger.debug(
                 f"Fetched set {name} with ID {set_id} ({len(tracks)} tracks)"
             )
-            playable_sets.append((name, set_id, tracks))
         return playable_sets
 
     @cache(ttl=10)
-    def get_likes(self, user_id=None):
+    def get_user_favorites(self, user_id=None):
         # https://developers.soundcloud.com/docs/api/reference#GET--users--id--favorites
         user_url = get_user_url(user_id)
-        likes = self._get(f"{user_url}/favorites", limit=True)
+        likes = self.OAuth.get(f"{user_url}/favorites", limit=True)
         return self.parse_results(likes)
 
     @cache(ttl=10)
-    def get_tracks(self, user_id=None):
+    def get_user_tracks(self, user_id=None):
         user_url = get_user_url(user_id)
-        tracks = self._get(f"{user_url}/tracks", limit=True)
+        # Only works using standard app client_id and API-v1
+        tracks = self.OAuth.get(f"{user_url}/tracks", limit=True)
         return self.parse_results(tracks)
+
+    # @my_vcr.use_cassette("sc-resolve-selections.yaml")
+    @cache(ttl=600)
+    def get_selections(self, playlist_key, limit=10):
+        selections = {}
+        explored_selections = self.session_public.get(
+            "mixed-selections",
+            limit=limit,
+        )
+        for selection in explored_selections["collection"]:
+            selections[selection["id"]] = selection
+            if not selection.get("items"):
+                continue
+
+            # Save playlists into dict for ease of use
+            playlists = selection.get("items").get("collection", [])
+            selection[playlist_key] = {}
+            for playlist in playlists:
+                selection[playlist_key][playlist["id"]] = playlist
+
+            if playlist_key == "items":
+                for key in ["next_href", "query_urn", "collection"]:
+                    selection["items"].pop(key)
+            else:
+                selection.pop("items")
+
+            logger.debug(
+                f"Fetched selection {selection.get('title')} with ID "
+                f"{selection['id']} ({len(selection[playlist_key])} playlists)"
+            )
+        return selections
 
     # Public
     @cache()
-    def get_track(self, track_id, streamable=False):
-        logger.debug(f"Getting info for track with ID {track_id}")
+    def get_parsed_track(self, track_id, streamable=False):
         try:
-            return self.parse_track(self._get(f"tracks/{track_id}"), streamable)
+            track = self.get_track(track_id)
+            return self.parse_track(track, streamable)
         except Exception:
             return None
+
+    def get_track(self, track_id):
+        logger.debug(f"Getting info for track with ID {track_id}")
+
+        url = f"tracks/{track_id}"
+
+        # Try with public client first (API v2)
+        res = self.session_public.get(url)
+        if res.get("media"):
+            return res
+
+        logger.debug(
+            f"Failed public (API-v2) call with url: {url}.\n"
+            f"Trying OAuth (API-v1) call with url: {url} ..."
+        )
+        # Try using standard app client_id (API v1)
+        return self.OAuth.get(url)
+
+    def get_tracks_batch(self, track_ids):
+        tracks_str = ",".join([str(track) for track in track_ids])
+        logger.debug(f"Getting info for tracks with IDs {tracks_str}")
+
+        url = f"tracks?ids={tracks_str}"
+        res_batch = self.session_public.get(url)
+
+        # Try one at a time if batch request failed
+        if not res_batch:
+            res_batch = []
+            for track_id in track_ids:
+                res_batch.append(self.get_track(track_id))
+        return res_batch
 
     @staticmethod
     def parse_track_uri(track):
@@ -251,12 +353,13 @@ class SoundCloudClient:
 
     def search(self, query):
         # https://developers.soundcloud.com/docs/api/reference#tracks
+        # Still only works using standard app client_id and API-v1
         query = quote_plus(query.encode("utf-8"))
-        search_results = self._get(f"tracks?q={query}", limit=True)
+        search_results = self.OAuth.get(f"tracks?q={query}", limit=True)
         tracks = []
         for track in search_results:
             tracks.append(self.parse_track(track, False))
-        return self.sanitize_tracks(tracks)
+        return sanitize_list(tracks)
 
     def parse_results(self, res):
         tracks = []
@@ -273,33 +376,11 @@ class SoundCloudClient:
                     tracks.append(self.parse_track(track))
             else:
                 logger.warning(f"Unknown item type {item['kind']!r}")
-        return self.sanitize_tracks(tracks)
+        return sanitize_list(tracks)
 
     def resolve_url(self, uri):
-        return self.parse_results([self._get(f"resolve?url={uri}")])
-
-    def _get(self, url, limit=None):
-        url = f"https://api.soundcloud.com/{url}"
-        params = [("client_id", self.CLIENT_ID)]
-        if limit:
-            params.insert(0, ("limit", self.explore_songs))
-        try:
-            with closing(self.http_client.get(url, params=params)) as res:
-                logger.debug(f"Requested {res.url}")
-                res.raise_for_status()
-                return res.json()
-        except Exception as e:
-            if isinstance(e, HTTPError) and e.response.status_code == 401:
-                logger.error(
-                    'Invalid "auth_token" used for SoundCloud '
-                    "authentication!"
-                )
-            else:
-                logger.error(f"SoundCloud API request failed: {e}")
-        return {}
-
-    def sanitize_tracks(self, tracks):
-        return [t for t in tracks if t]
+        res = self.OAuth.get(f"resolve?url={uri}")
+        return self.parse_results([res])
 
     @cache()
     def parse_track(self, data, remote_url=False):
@@ -329,12 +410,22 @@ class SoundCloudClient:
             artist_kwargs["name"] = label_name
             album_kwargs["name"] = "SoundCloud"
 
-        if "date" in data:
-            track_kwargs["date"] = data["date"]
+        # Maybe identify stream as preview in track description
+        if data.get("policy") and data["policy"] == "SNIP":
+            addition = " - Preview (Get SoundCloud GO for full stream)"
+            album_kwargs["name"] += addition
+
+        track_kwargs["date"] = get_datetime(data.get("created_at")).strftime(
+            "%Y-%m-%d"
+        )
+        if data.get("last_modified"):
+            seconds = get_datetime(data["last_modified"]).timestamp()
+            track_kwargs["last_modified"] = int(seconds * 1000)
+
+        track_kwargs["genre"] = data.get("genre")
 
         if remote_url:
-            args = (data["sharing"], data["permalink_url"], data["stream_url"])
-            track_kwargs["uri"] = self.get_streamable_url(*args)
+            track_kwargs["uri"] = self.get_streamable_url(data)
             if track_kwargs["uri"] is None:
                 logger.info(
                     f"{data.get('title')} can't be streamed from SoundCloud"
@@ -347,6 +438,9 @@ class SoundCloudClient:
 
         track_kwargs["length"] = int(data.get("duration", 0))
         track_kwargs["comment"] = data.get("permalink_url", "")
+        description = data.get("description")
+        if description:
+            track_kwargs["comment"] += " - " + description
 
         if artist_kwargs:
             track_kwargs["artists"] = [Artist(**artist_kwargs)]
@@ -356,94 +450,50 @@ class SoundCloudClient:
 
         return Track(**track_kwargs)
 
-    def _update_public_client_id(self):
-        """Gets a client id which can be used to stream publicly available tracks"""
+    def get_streamable_url(self, track):
+        transcoding = {}
+        if track.get("media", {}).get("transcodings"):
+            # Track obtained through API-v2 has "media" field
+            transcoding = pick_transcoding(
+                track["media"]["transcodings"],
+                stream_pref=self.streaming_pref,
+            )
 
-        def get_page(url):
-            return self.public_stream_client.get(url).content.decode("utf-8")
+        if transcoding:
+            stream = self.session_public.get_public_stream(transcoding)
+            if stream.status_code in self.auth_error_codes:
+                self.session_public.update_public_client_id()  # refresh once
+                stream = self.session_public.get_public_stream(transcoding)
 
-        public_page = get_page("https://soundcloud.com/")
-        regex_str = r"client_id=([a-zA-Z0-9]{16,})"
-        soundcloud_soup = BeautifulSoup(public_page, "html.parser")
-        scripts = soundcloud_soup.find_all("script", attrs={"src": True})
-        self.public_client_id = None
-        for script in scripts:
-            for match in re.finditer(regex_str, get_page(script["src"])):
-                self.public_client_id = match.group(1)
-                logger.debug(
-                    f"Updated SoundCloud public client id to: {self.public_client_id}"
+            try:
+                return stream.json().get("url")
+            except Exception as e:
+                logger.info(
+                    "Streaming of public song using public client id failed, "
+                    "trying with standard application client id.."
                 )
-                return
+                logger.debug(
+                    f"Caught public client id stream failure:\n{e}"
+                    f"\n{parse_fail_reason(stream.reason)}"
+                )
 
-        logger.warning("Failed to update SoundCloud public client id")
-
-    def _get_public_stream(self, progr_stream):
-        params = [("client_id", self.public_client_id)]
-        return self.public_stream_client.get(progr_stream, params=params)
-
-    @staticmethod
-    def parse_fail_reason(reason):
-        return "" if reason == "Unknown" else f"({reason})"
-
-    @cache()
-    def get_streamable_url(self, sharing, permalink_url, stream_url):
-
-        if self.public_client_id is None:
-            self._update_public_client_id()
-
-        progressive_urls = {}
-        if sharing == "public" and self.public_client_id is not None:
-            res = self.public_stream_client.get(permalink_url)
-
-            for html_substring in res.text.split('"'):
-                if html_substring.endswith("preview/progressive"):
-                    progressive_urls["preview"] = html_substring
-                elif html_substring.endswith("stream/progressive"):
-                    progressive_urls["stream"] = html_substring
-
-                if progressive_urls.get("preview"):
-                    if progressive_urls.get("stream"):
-                        break
-
-            if progressive_urls.get("stream"):
-                stream = self._get_public_stream(progressive_urls["stream"])
-                if stream.status_code in [401, 403, 429]:
-                    self._update_public_client_id()  # refresh public client id once
-                    stream = self._get_public_stream(progressive_urls["stream"])
-
-                try:
-                    return stream.json().get("url")
-                except Exception as e:
-                    logger.info(
-                        "Streaming of public song using public client id failed, "
-                        "trying with standard app client id.."
-                    )
-                    logger.debug(
-                        f"Caught public client id stream fail:\n{str(e)}"
-                        f"\n{self.parse_fail_reason(stream.reason)}"
-                    )
-
-        # ~quickly yields rate limit errors
-        req = self.http_client.head(f"{stream_url}?client_id={self.CLIENT_ID}")
+        # Get stream using standard app client_id. (Quickly yields rate limit errors)
+        if not track.get("stream_url"):
+            track = self.OAuth.get(f"tracks/{track['id']}")
+        req_url = f"{track['stream_url']}?client_id={self.CLIENT_ID}"
+        req = self.OAuth.head(req_url)
         if req.status_code == 302:
             return req.headers.get("Location", None)
         elif req.status_code == 429:
             logger.warning(
-                "SoundCloud daily rate limit exceeded "
-                f"{self.parse_fail_reason(req.reason)}"
+                "SoundCloud daily rate limit exceeded on application client id"
+                f"{parse_fail_reason(req.reason)}"
             )
-            if progressive_urls.get("preview"):
-                logger.info("Playing public preview stream")
-                stream = self._get_public_stream(progressive_urls["preview"])
-                return stream.json().get("url")
 
-    def resolve_tracks(self, track_ids):
-        """Resolve tracks concurrently emulating browser
-
-        :param track_ids:list of track ids
-        :return:list `Track`
-        """
-        pool = ThreadPool(processes=16)
-        tracks = pool.map(self.get_track, track_ids)
-        pool.close()
-        return self.sanitize_tracks(tracks)
+    # def parse_parallel(self, tracks, streamable):
+    #     from multiprocessing.pool import ThreadPool
+    #     from itertools import repeat
+    #     pool = ThreadPool(processes=2)
+    #     tracks = pool.starmap(self.parse_track, zip(tracks, repeat(streamable)))
+    #     pool.close()
+    #     return self.sanitize_tracks(tracks)

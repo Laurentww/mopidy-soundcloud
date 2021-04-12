@@ -21,6 +21,9 @@ class Extension(ext.Extension):
         schema = super().get_config_schema()
         schema["explore_songs"] = config.Integer(optional=True)
         schema["auth_token"] = config.Secret()
+        schema["stream_pref"] = config.String(
+            optional=True, choices=["progressive", "hls"]
+        )
         schema["explore"] = config.Deprecated()
         schema["explore_pages"] = config.Deprecated()
         return schema

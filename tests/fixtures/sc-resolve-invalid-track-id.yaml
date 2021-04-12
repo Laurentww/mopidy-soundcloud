@@ -1,0 +1,58 @@
+interactions:
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      user-agent:
+      - Mopidy-SoundCloud/3.0.1 Mopidy/3.1.1 CPython/3.9.2
+    method: GET
+    uri: https://api.soundcloud.com/tracks/blahblahrubbosh?client_id=93e33e327fd8a9b77becd179652272e2
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAAAJSOsQ7CMAxEfyXK0qU0HZgysrGyIoTSxKJR3bjESYVU9d8xgh9gOMnnOz3dpj0F
+        0PbY962egdk9xOlzWh3GoEp2flIxWNUM6MaPch0G4rHRrcaYJimPpSxsjQmwAtICmTummoJHqqHz
+        NJtAno1booHXgpQhG6mlg3yEwsWVysKRDeqgTi6oCzwrcJEQcqYs4XX7nvf/Nu63H0LbVBH3NwAA
+        AP//AwAUX21b7wAAAA==
+    headers:
+      Cache-Control:
+      - private, max-age=0
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Length:
+      - '184'
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Tue, 06 Apr 2021 18:47:25 GMT
+      Referrer-Policy:
+      - no-referrer
+      Server:
+      - am/2
+      Vary:
+      - Origin
+      Via:
+      - 1.1 b2bc712713f500af8be071fa65fa924d.cloudfront.net (CloudFront)
+      X-Amz-Cf-Id:
+      - nqecF3vxchC4U2ipnymxEWSxm8-TF4r_YOimEvXwx9u5rJ5a88nYaw==
+      X-Amz-Cf-Pop:
+      - AMS50-C1
+      X-Cache:
+      - Error from cloudfront
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - DENY
+      X-Robots-Tag:
+      - noindex
+    status:
+      code: 400
+      message: Bad Request
+version: 1

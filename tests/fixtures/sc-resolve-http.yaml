@@ -2,11 +2,14 @@ interactions:
 - request:
     body: null
     headers:
-      Accept: ['*/*']
-      Accept-Encoding: ['gzip, deflate']
-      Authorization: [!!python/unicode OAuth 1-35204-61921957-55796ebef403996]
-      Connection: [keep-alive]
-      User-Agent: [python-requests/2.11.1]
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      user-agent:
+      - Mopidy-SoundCloud/3.0.1 Mopidy/3.1.1 CPython/3.9.2
     method: GET
     uri: https://api.soundcloud.com/resolve?url=https://soundcloud.com/bbc-radio-4/m-w-cloud&client_id=93e33e327fd8a9b77becd179652272e2
   response:
@@ -16,133 +19,114 @@ interactions:
         tZcAB8iVSVItezxEtrYoRVsa27851x5Gri8lb+JnUxOic96Y+cI5xSK3FM5eR71Dew+O/GrtGjlM
         1psZ0WJE+P4AAAD//wMAI6hydXwAAAA=
     headers:
-      access-control-allow-headers: ['Accept, Authorization, Content-Type, Origin']
-      access-control-allow-methods: ['GET, PUT, POST, DELETE']
-      access-control-allow-origin: ['*']
-      access-control-expose-headers: [Date]
-      cache-control: [no-cache]
-      content-encoding: [gzip]
-      content-length: ['137']
-      content-type: [application/json; charset=utf-8]
-      date: ['Thu, 27 Oct 2016 20:33:37 GMT']
-      location: ['https://api.soundcloud.com/tracks/122889665?client_id=93e33e327fd8a9b77becd179652272e2']
-      server: [am/2]
-      status: [302 Found]
-    status: {code: 302, message: Found}
+      Cache-Control:
+      - max-age=0, private
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Length:
+      - '137'
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Mon, 12 Apr 2021 19:27:57 GMT
+      Location:
+      - https://api.soundcloud.com/tracks/122889665?client_id=93e33e327fd8a9b77becd179652272e2
+      Referrer-Policy:
+      - no-referrer
+      Server:
+      - am/2
+      Status:
+      - 302 Found
+      Vary:
+      - Origin
+      Via:
+      - 1.1 dbd13e5e9621f4e45e6a452ed9862bf1.cloudfront.net (CloudFront)
+      X-Amz-Cf-Id:
+      - A48IuQ5r7C-dncREQ3qm1qZkYF4kWU9MPTXMSJxZ-NXy7e6PIR9SXQ==
+      X-Amz-Cf-Pop:
+      - AMS50-C1
+      X-Cache:
+      - Miss from cloudfront
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - DENY
+      X-Robots-Tag:
+      - noindex
+      X-UA-Compatible:
+      - IE=Edge,chrome=1
+    status:
+      code: 302
+      message: Moved Temporarily
 - request:
     body: null
     headers:
-      Accept: ['*/*']
-      Accept-Encoding: ['gzip, deflate']
-      Authorization: [!!python/unicode OAuth 1-35204-61921957-55796ebef403996]
-      Connection: [keep-alive]
-      User-Agent: [python-requests/2.11.1]
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      user-agent:
+      - Mopidy-SoundCloud/3.0.1 Mopidy/3.1.1 CPython/3.9.2
     method: GET
     uri: https://api.soundcloud.com/tracks/122889665?client_id=93e33e327fd8a9b77becd179652272e2
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAAAJRVy67bNhD9FYIFuqn1tmxdLXPRxyJdtE3QpUBJY4k1RaokZUU3CJB/yKq/ly/p
-        UJIdXSPIwytydGZ45szDb+mZy5rm1GpWnemOcrxEcZxlD4dDuqOVBmahLphFTBxGSRDFQRiT6JDv
-        4zwNyU8h/tBvMKAL55ylhyw5xjtaD5pZriTN0/TwkGEs1XUgLSsF0NzqAXbUWIyOkU9cctNCjYGU
-        5g2XTBSVkhbhheFPCHnIon0UYVjBjC06VfMTh/qzpKIbKdMyzWWDqH4oBa/QZFlTCG5cOlwRzWqC
-        tKCeSMdt1YIQhMmajFCWxKgBjwjhao+ePeiOCS7P6Np5o1cJNTjCxqJG3TYr6Eqoa2cpygnRTAjE
-        1WqUQrF6QZ6YMAjtB121zEAxaEFzOQjhMixBzFou9xvGcutcF2sDUjvpXE6Lnb5qmSW/b/P42+Xx
-        15zHx/cfyKsWyONKuwZTad4vFUJXbkjJLXhO7psozqjV0LSWWEUmNZByIi9ePJI/nSpk75NflCad
-        0kAEQ5ghgp+B2BYwOcJlJYYayA+Pg+ZqMPvHNapEcgpBmtgRwK6Sf3z/H9I2gBdGJIykErx3j2oy
-        ssl/iVUD6XjM75206sgXM8b4kJPW2j4PgnEc/bKs/Er5wznotWo0w3Y0QRmGR/GvbulVeMm6VVcN
-        AlD3VWQ3IIWd+vV+hglbs5HMDtc6cKOr5XThNahtTcu+ux7XqMUETN/bOuz59t5Ys+lqug3HSWEz
-        uiYe2cUx5xXImSn2moeg1hpPYxH0ZR4q1B+/OSkMasF67s/NPbcwStIFc3YmuE3+OtE0f0ufDfW6
-        LeZvz0cCxfXmWfH2q/Mq5KZdyI+3089vLP3sMKdBFAXxkURpHh3zKPm0Yb6Wg3vTBCvVLbulEHTt
-        hDuv57zZhVmmNw7uLR75Bl1qOTssEOM5WockCpNjmHlD1oF+8gTTDfj/9A19t67EXrCpdJ1T4bNY
-        sGi1n9gFi2k3m+B72QbbJcS0HZU+f5n4glmZ7+P0EKaZd6ySZOIb5jvXU+Aa7C7a+Cxa/8fr4c1v
-        L399fcmeis7vZXPbhXd+39BuweLoinanV3J4SD7tzqs13NFVQFzv5mpNo9ufzEZuZi2rWmc0xXfP
-        QbDxpu/+BwAA//8DALBQnT8uBwAA
+        H4sIAAAAAAAAALxVy67bNhD9FUIFuon18lNXy1w07SJdtE3QpUBJY4k1RaokZUU3CJB/6Kq/ly/p
+        kHpEVwjaIot4Y/N4zvDMk++9GxOll3pG0eLm7TyGh3i/T5KH8/m08woF1ECZUYM2+yg+hPE+jPYk
+        PqfHfXqKyIsIP8jrNKjMkpPTOTlc9juv7BQ1TAovPZ3ODwn6kk0DwtCcg5ca1cECZYXsBN4Q7zxt
+        8D6868oE0zWU6FoqVjFBOVoJY601e0KThyQ+xjFexKk2WSNLdmVQflFmvMjUNVVMVGjVdjlnBUKG
+        Vhln2gbIJFG0JKgKyoE0zBQ1cE6oKEkPeU40yiytCZNHZLagGsqZuCG18Xu/4LKzgrXBrDXrOKHJ
+        oSwtkuUDWlPOLb9TRU01ZJ3iXio6zleYYcbyR5TTHLhL73iuQCibJSt/tPPe1NSQn9eSf7eSf3OS
+        P338i7ypgTxOCkvQhWLtWB6kMk1yZsC3mV3it6CSXVUbYiQZZEfygbx8+Uh+tQkgx4C8koo0UgHh
+        FM004ewGxNSgYUeYKHhXAvnusVNMdvr4OHkVKE6ikSKmBzBTdj99/Btla8ADJQJ6UnDW2ksV6ekQ
+        vMYCgbA63H1XJRvyrxGjf0hJbUybhmHf90GeF0Ehg+4WtkpWimLj6TCPogv/U9XenGJBmymvCjhg
+        HaYk2+nIzNDasxOP4A0GbMVKUNPNxWBaFXON7qwEuS5t3jbzz8l5NgBVW6zBLq+3YEmHGVrG4Sqx
+        /Wzb9vRuA2AFCCcYu8tHo9poX2Et1N2NEZYB/7MZ0ZgS2rLAtbNrWsxME7ogdbhM/zTVXvreezbY
+        08Zw/z0fAsyx76bDP07kKZ+rriHfL79+eGe8L45vEsZxuL+QOMbdkeIcL1vmv2Kwd+pwkrpWNxZi
+        oW5oz4XTOzVUbRgsDjRSSuEIo4n2ra7zIY4Olyjxu6QB9eRzqioI/mgr78O0F7+B7HC9gKgyvVRb
+        8iaC0WYK4bg/naNT4l+Kw2FgqxDmbbbx9T/aJxyJdtvIXnBJy6/wMVPRC3Y52JbfeLHwOq72l7fd
+        u59e//j2njxlTdCKyiloKBMZlwU2b6XnUcIqMu62snuA1IDfuBqfbd35oAHfQpMZeQOxwVx5R8SV
+        +0rvOKT2GbtSjrtwRFtOh9yukc+P3RY6PSSHVbomNNp5k0erfUYvsd0OrdRmgZLP3PHxma6fQZ0p
+        sHlwD6DV++EfAAAA//8DANrJX5X/BwAA
     headers:
-      access-control-allow-headers: ['Accept, Authorization, Content-Type, Origin']
-      access-control-allow-methods: ['GET, PUT, POST, DELETE']
-      access-control-allow-origin: ['*']
-      access-control-expose-headers: [Date]
-      cache-control: ['private, max-age=0, must-revalidate']
-      content-encoding: [gzip]
-      content-length: ['876']
-      content-type: [application/json; charset=utf-8]
-      date: ['Thu, 27 Oct 2016 20:33:38 GMT']
-      etag: ['"62bfb211e440fb08b0ee3d22dac9cc2a"']
-      server: [am/2]
-      status: [200 OK]
-    status: {code: 200, message: OK}
-- request:
-    body: null
-    headers:
-      Accept: ['*/*']
-      Accept-Encoding: ['gzip, deflate']
-      Authorization: [!!python/unicode OAuth 1-35204-61921957-55796ebef403996]
-      Connection: [keep-alive]
-      User-Agent: [python-requests/2.11.1]
-    method: GET
-    uri: https://api.soundcloud.com/resolve?url=https://soundcloud.com/bbc-radio-4/m-w-cloud&client_id=93e33e327fd8a9b77becd179652272e2
-  response:
-    body:
-      string: !!binary |
-        H4sIAAAAAAAAABTJSwrCMBAA0KuUWWtjJzSfgrjzGjKdRAzGpJjJSry7Fd7ufaAJSW+wgD7hcByu
-        tZcAB8iVSVItezxEtrYoRVsa27851x5Gri8lb+JnUxOic96Y+cI5xSK3FM5eR71Dew+O/GrtGjlM
-        1psZ0WJE+P4AAAD//wMAI6hydXwAAAA=
-    headers:
-      access-control-allow-headers: ['Accept, Authorization, Content-Type, Origin']
-      access-control-allow-methods: ['GET, PUT, POST, DELETE']
-      access-control-allow-origin: ['*']
-      access-control-expose-headers: [Date]
-      cache-control: [no-cache]
-      content-encoding: [gzip]
-      content-length: ['137']
-      content-type: [application/json; charset=utf-8]
-      date: ['Thu, 27 Oct 2016 20:34:10 GMT']
-      location: ['https://api.soundcloud.com/tracks/122889665?client_id=93e33e327fd8a9b77becd179652272e2']
-      server: [am/2]
-      status: [302 Found]
-    status: {code: 302, message: Found}
-- request:
-    body: null
-    headers:
-      Accept: ['*/*']
-      Accept-Encoding: ['gzip, deflate']
-      Authorization: [!!python/unicode OAuth 1-35204-61921957-55796ebef403996]
-      Connection: [keep-alive]
-      User-Agent: [python-requests/2.11.1]
-    method: GET
-    uri: https://api.soundcloud.com/tracks/122889665?client_id=93e33e327fd8a9b77becd179652272e2
-  response:
-    body:
-      string: !!binary |
-        H4sIAAAAAAAAAJRVy67bNhD9FYIFuqn1tmxdLXPRxyJdtE3QpUBJY4k1RaokZUU3CJB/yKq/ly/p
-        UJIdXSPIwytydGZ45szDb+mZy5rm1GpWnemOcrxEcZxlD4dDuqOVBmahLphFTBxGSRDFQRiT6JDv
-        4zwNyU8h/tBvMKAL55ylhyw5xjtaD5pZriTN0/TwkGEs1XUgLSsF0NzqAXbUWIyOkU9cctNCjYGU
-        5g2XTBSVkhbhheFPCHnIon0UYVjBjC06VfMTh/qzpKIbKdMyzWWDqH4oBa/QZFlTCG5cOlwRzWqC
-        tKCeSMdt1YIQhMmajFCWxKgBjwjhao+ePeiOCS7P6Np5o1cJNTjCxqJG3TYr6Eqoa2cpygnRTAjE
-        1WqUQrF6QZ6YMAjtB121zEAxaEFzOQjhMixBzFou9xvGcutcF2sDUjvpXE6Lnb5qmSW/b/P42+Xx
-        15zHx/cfyKsWyONKuwZTad4vFUJXbkjJLXhO7psozqjV0LSWWEUmNZByIi9ePJI/nSpk75NflCad
-        0kAEQ5ghgp+B2BYwOcJlJYYayA+Pg+ZqMPvHNapEcgpBmtgRwK6Sf3z/H9I2gBdGJIykErx3j2oy
-        ssl/iVUD6XjM75206sgXM8b4kJPW2j4PgnEc/bKs/Er5wznotWo0w3Y0QRmGR/GvbulVeMm6VVcN
-        AlD3VWQ3IIWd+vV+hglbs5HMDtc6cKOr5XThNahtTcu+ux7XqMUETN/bOuz59t5Ys+lqug3HSWEz
-        uiYe2cUx5xXImSn2moeg1hpPYxH0ZR4q1B+/OSkMasF67s/NPbcwStIFc3YmuE3+OtE0f0ufDfW6
-        LeZvz0cCxfXmWfH2q/Mq5KZdyI+3089vLP3sMKdBFAXxkURpHh3zKPm0Yb6Wg3vTBCvVLbulEHTt
-        hDuv57zZhVmmNw7uLR75Bl1qOTssEOM5WockCpNjmHlD1oF+8gTTDfj/9A19t67EXrCpdJ1T4bNY
-        sGi1n9gFi2k3m+B72QbbJcS0HZU+f5n4glmZ7+P0EKaZd6ySZOIb5jvXU+Aa7C7a+Cxa/8fr4c1v
-        L399fcmeis7vZXPbhXd+39BuweLoinanV3J4SD7tzqs13NFVQFzv5mpNo9ufzEZuZi2rWmc0xXfP
-        QbDxpu/+BwAA//8DALBQnT8uBwAA
-    headers:
-      access-control-allow-headers: ['Accept, Authorization, Content-Type, Origin']
-      access-control-allow-methods: ['GET, PUT, POST, DELETE']
-      access-control-allow-origin: ['*']
-      access-control-expose-headers: [Date]
-      cache-control: ['private, max-age=0, must-revalidate']
-      content-encoding: [gzip]
-      content-length: ['876']
-      content-type: [application/json; charset=utf-8]
-      date: ['Thu, 27 Oct 2016 20:34:10 GMT']
-      etag: ['"62bfb211e440fb08b0ee3d22dac9cc2a"']
-      server: [am/2]
-      status: [200 OK]
-    status: {code: 200, message: OK}
+      Cache-Control:
+      - private, max-age=0
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Length:
+      - '936'
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Mon, 12 Apr 2021 19:27:57 GMT
+      Referrer-Policy:
+      - no-referrer
+      Server:
+      - am/2
+      Vary:
+      - Origin
+      Via:
+      - 1.1 dbd13e5e9621f4e45e6a452ed9862bf1.cloudfront.net (CloudFront)
+      X-Amz-Cf-Id:
+      - 7MEt_EKqlSFUa0D2NlgvPFK8znr2c47eDjaw0ZkJEuh8nDB2mIxewQ==
+      X-Amz-Cf-Pop:
+      - AMS50-C1
+      X-Cache:
+      - Miss from cloudfront
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - DENY
+      X-Robots-Tag:
+      - noindex
+    status:
+      code: 200
+      message: OK
 version: 1
