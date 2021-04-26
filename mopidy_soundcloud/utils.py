@@ -138,7 +138,7 @@ def get_image_urls(data):
     ]
 
     # Only include avatar images if no other images found
-    if image_sources.count(None) == 2:
+    if image_sources.count(None) == len(image_sources):
         image_sources = [
             data.get("user", {}).get("avatar_url"),
             data.get("avatar_url"),

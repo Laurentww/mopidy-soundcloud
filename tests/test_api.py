@@ -34,7 +34,7 @@ class ApiTest(unittest.TestCase):
 
     def test_public_client_no_token(self):
         token_key = "authorization"
-        assert token_key not in self.api.session_public.headers._store
+        assert token_key not in self.api.session_public.session.headers._store
 
     def test_resolves_string(self):
         _id = self.api.parse_track_uri("soundcloud:song.38720262")
@@ -42,7 +42,7 @@ class ApiTest(unittest.TestCase):
 
     @my_vcr.use_cassette("sc-login-error.yaml")
     def test_responds_with_error(self):
-        with mock.patch("mopidy_soundcloud.soundcloud.logger.error") as d:
+        with mock.patch("mopidy_soundcloud.web.logger.error") as d:
             config = Extension().get_config_schema()
             config["auth_token"] = "1-fake-token"
             SoundCloudClient({"soundcloud": config, "proxy": {}}).user

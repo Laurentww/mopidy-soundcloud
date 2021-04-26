@@ -1,18 +1,11 @@
 import collections
 import logging
-import re
-from datetime import datetime, timedelta
-from contextlib import closing
+from typing import Union
 from urllib.parse import quote_plus
-from bs4 import BeautifulSoup
 
-import requests
-from requests.adapters import HTTPAdapter
-from requests.exceptions import HTTPError
-
-import mopidy_soundcloud
-from mopidy import httpclient
 from mopidy.models import Album, Artist, Track
+
+from mopidy_soundcloud.web import SoundCloudSession
 from mopidy_soundcloud.utils import (
     cache,
     readable_url,
@@ -36,147 +29,9 @@ logger = logging.getLogger(__name__)
 # )
 
 
-class ThrottlingHttpAdapter(HTTPAdapter):
-    def __init__(self, burst_length, burst_window, wait_window):
-        super().__init__()
-        self.max_hits = burst_length
-        self.hits = 0
-        self.rate = burst_length / burst_window
-        self.burst_window = timedelta(seconds=burst_window)
-        self.total_window = timedelta(seconds=burst_window + wait_window)
-        self.timestamp = datetime.min
-
-    def _is_too_many_requests(self):
-        now = datetime.utcnow()
-        if now < self.timestamp + self.total_window:
-            elapsed = now - self.timestamp
-            self.hits += 1
-            if (now < self.timestamp + self.burst_window) and (
-                self.hits < self.max_hits
-            ):
-                return False
-            else:
-                logger.debug(
-                    f"Request throttling after {self.hits} hits in "
-                    f"{elapsed.microseconds} us "
-                    f"(window until {self.timestamp + self.total_window})"
-                )
-                return True
-        else:
-            self.timestamp = now
-            self.hits = 0
-            return False
-
-    def send(self, request, **kwargs):
-        if request.method == "HEAD" and self._is_too_many_requests():
-            resp = requests.Response()
-            resp.request = request
-            resp.url = request.url
-            resp.status_code = 429
-            resp.reason = (
-                "Client throttled to {self.rate:.1f} requests per second"
-            )
-            return resp
-        else:
-            return super().send(request, **kwargs)
-
-
-class SoundCloudSession(requests.Session):
-    OAuth = False
-    client_param = None
-
-    def __init__(self, config, host, explore_songs, client_id=None):
-        super().__init__()
-        self.api_host = host
-        self.client_id = client_id
-        self.explore_songs = explore_songs
-
-        proxy = httpclient.format_proxy(config["proxy"])
-        self.proxies.update({"http": proxy, "https": proxy})
-
-        if self.client_id:
-            full_user_agent = httpclient.format_user_agent(
-                f"{mopidy_soundcloud.Extension.dist_name}/"
-                f"{mopidy_soundcloud.__version__}"
-            )
-            add_headers = {
-                "user-agent": full_user_agent,
-                "Authorization": f"OAuth {config['soundcloud']['auth_token']}",
-            }
-            self.headers.update(add_headers)
-            self.OAuth = True
-
-        adapter = ThrottlingHttpAdapter(
-            burst_length=3, burst_window=1, wait_window=10
-        )
-        self.mount(self.api_host, adapter)
-
-    @property
-    def client_id(self):
-        return self._client_id
-
-    @client_id.setter
-    def client_id(self, client_id):
-        self.client_param = ("client_id", client_id)
-        self._client_id = client_id
-
-    def get_request(self, *args, **kwargs):
-        return super().get(*args, **kwargs)
-
-    def get(self, filename, limit=None) -> dict:
-        if not self.OAuth and self.client_id is None:
-            self.update_public_client_id()
-
-        params = [self.client_param]
-        if limit:
-            limit_int = limit if type(limit) == int else self.explore_songs
-            params = [("limit", limit_int)] + params
-
-        url = f"{self.api_host}/{filename}"
-        try:
-            with closing(self.get_request(url, params=params)) as res:
-                logger.debug(f"Requested {res.url}")
-                res.raise_for_status()
-                return res.json()
-        except Exception as e:
-            if isinstance(e, HTTPError) and e.response.status_code == 401:
-                if self.OAuth:
-                    logger.error(
-                        'Invalid "auth_token" used for SoundCloud '
-                        "authentication!"
-                    )
-                else:
-                    logger.error(f"SoundCloud API request failed: {e}")
-            else:
-                logger.error(f"SoundCloud API request failed: {e}")
-        return {}
-
-    def get_public_stream(self, transcoding):
-        return self.get_request(transcoding["url"], params=[self.client_param])
-
-    def update_public_client_id(self):
-        """ Gets a client id which can be used to stream publicly available tracks """
-
-        def _get_page(url):
-            return self.get_request(url).content.decode("utf-8")
-
-        public_page = _get_page("https://soundcloud.com/")
-        regex_str = r"client_id=([a-zA-Z0-9]{16,})"
-        soundcloud_soup = BeautifulSoup(public_page, "html.parser")
-        scripts = soundcloud_soup.find_all("script", attrs={"src": True})
-        for script in scripts:
-            for match in re.finditer(regex_str, _get_page(script["src"])):
-                self.client_id = match.group(1)
-                logger.debug(
-                    f"Updated SoundCloud public client id to: {self.client_id}"
-                )
-                return
-
-
 class SoundCloudClient:
     CLIENT_ID = "93e33e327fd8a9b77becd179652272e2"
 
-    auth_error_codes = [401, 403, 429]
     api_url = {
         "v1": "https://api.soundcloud.com",
         "v2": "https://api-v2.soundcloud.com",
@@ -281,27 +136,29 @@ class SoundCloudClient:
             "mixed-selections",
             limit=limit,
         )
-        for selection in explored_selections["collection"]:
-            selections[selection["id"]] = selection
-            if not selection.get("items"):
-                continue
+        if explored_selections.get("collection"):
+            for selection in explored_selections["collection"]:
+                selections[selection["id"]] = selection
+                selection[playlist_key] = {}
 
-            # Save playlists into dict for ease of use
-            playlists = selection.get("items").get("collection", [])
-            selection[playlist_key] = {}
-            for playlist in playlists:
-                selection[playlist_key][playlist["id"]] = playlist
+                if not selection.get("items"):
+                    continue
 
-            if playlist_key == "items":
-                for key in ["next_href", "query_urn", "collection"]:
-                    selection["items"].pop(key)
-            else:
-                selection.pop("items")
+                # Save playlists into dict for ease of use
+                playlists = selection.get("items").get("collection", [])
+                for playlist in playlists:
+                    selection[playlist_key][playlist["id"]] = playlist
 
-            logger.debug(
-                f"Fetched selection {selection.get('title')} with ID "
-                f"{selection['id']} ({len(selection[playlist_key])} playlists)"
-            )
+                if playlist_key == "items":
+                    for key in ["next_href", "query_urn", "collection"]:
+                        selection["items"].pop(key)
+                else:
+                    selection.pop("items")
+
+                logger.debug(
+                    f"Fetched selection {selection.get('title')} with ID "
+                    f"{selection['id']} ({len(selection[playlist_key])} playlists)"
+                )
         return selections
 
     # Public
@@ -361,7 +218,10 @@ class SoundCloudClient:
             tracks.append(self.parse_track(track, False))
         return sanitize_list(tracks)
 
-    def parse_results(self, res):
+    def parse_results(
+        self,
+        res: Union[collections.Sized, collections.Iterable],
+    ):
         tracks = []
         logger.debug(f"Parsing {len(res)} result item(s)...")
         for item in res:
@@ -460,13 +320,9 @@ class SoundCloudClient:
             )
 
         if transcoding:
-            stream = self.session_public.get_public_stream(transcoding)
-            if stream.status_code in self.auth_error_codes:
-                self.session_public.update_public_client_id()  # refresh once
-                stream = self.session_public.get_public_stream(transcoding)
-
+            stream = self.session_public.get_stream(transcoding)
             try:
-                return stream.json().get("url")
+                return stream.json.get("url")
             except Exception as e:
                 logger.info(
                     "Streaming of public song using public client id failed, "
